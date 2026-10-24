@@ -1,0 +1,3 @@
+pilk
+faster-whisper
+zstandard

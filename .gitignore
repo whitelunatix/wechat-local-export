@@ -1,0 +1,41 @@
+# Local data and secrets
+*.db
+*.decrypted.db
+*.sqlite
+*.sqlite3
+*.silk
+*.wav
+*.mp3
+*.m4a
+*.amr
+*.jsonl
+*.csv
+*key*.txt
+*.key
+*.pem
+.env
+.env.*
+xwechat_files/
+msg_cache/
+voice_texts/
+all_voices/
+out/
+
+# Models and archives
+*.bin
+*.gguf
+*.safetensors
+*.zip
+*.7z
+*.tar.gz
+
+# Tooling
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+*.log
