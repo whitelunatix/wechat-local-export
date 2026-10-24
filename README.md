@@ -1,12 +1,14 @@
 # wechat-local-export
 
-微信 4.x 本地数据导出与结构化处理工具。面向**本人账号、已获授权**的本地备份场景，从已解密的 SQLite 数据库开始，批量导出消息、语音和转写文本。
+微信 4.x 本地数据导出与结构化处理工具。面向**本人账号、已获授权**的本地备份场景：捕获数据库密钥 → 批量解密 SQLCipher 4 数据库 → 导出消息、语音并离线转写。
 
 > **适配版本：微信 4.1.11.55（Windows 10 x64，2026-08 实测）。**
 > 微信升级后数据库表名、字段和媒体格式可能变化，使用前请先运行 `scripts/inspect_db.py` 校验结构。
 
 ## 功能
 
+- 通过外部 Hook DLL 捕获微信数据库 passphrase（仓库提供调用层，DLL 需自备）
+- 按每个库文件头 salt 派生 raw key，批量解密 SQLCipher 4 数据库
 - 批量发现 `Msg_<md5>` 消息表，导出为 JSONL / CSV
 - 按会话、时间范围、条数过滤
 - 从 `media_0.decrypted.db` 的 `VoiceInfo` 表批量提取语音
@@ -16,24 +18,27 @@
 
 ## 边界
 
-本仓库只开源**解密后的导出与转写模块**；完整本地流程中的密钥获取与 SQLCipher 解密不在开源范围，因此仓库从 `.decrypted.db` 开始。以下内容不在本仓库中，也不会随仓库分发：
+本仓库包含密钥捕获的**调用层**、SQLCipher 4 解密实现和导出/转写工具，但**不包含**：
 
-- 微信数据库密钥提取、内存扫描或进程 Hook 的具体实现
-- 任何第三方 DLL、EXE 或二进制文件
-- 任何聊天记录、语音、图片、模型权重或训练数据
+- 任何第三方 Hook DLL、EXE 或二进制文件
+- 任何真实密钥、聊天记录、语音、图片、模型权重或训练数据
 - 第三方 clone 仓库的代码
 
-输入数据库需要由使用者通过**本人账号、已授权**的方式准备为 `.decrypted.db`。请勿用于他人账号或未经授权的数据。
+Hook DLL 需要按目标微信版本自行编译或从可信来源取得；本仓库只定义调用接口，不打包、不分发 DLL。请仅用于**本人账号、已获授权**的本地数据；不要用于他人账号或未经授权的数据。
 
 ## 目录
 
 ```text
 scripts/
+  hook_key.py             # 通过外部 Hook DLL 捕获数据库密钥
+  decrypt_db.py           # SQLCipher 4 单库/批量解密
   inspect_db.py           # 查看数据库表、列、行数
   export_messages.py      # 导出消息为 JSONL / CSV
   export_voices.py        # 提取语音并转 WAV
   transcribe_voices.py    # faster-whisper 离线转写
 docs/
+  key-extraction.md       # Hook 接口、密钥格式与版本敏感性
+  sqlcipher.md            # SQLCipher 4 参数与页格式
   schema.md               # 4.1.11.55 常见表结构
   version-compatibility.md# 版本适配与时间敏感性说明
 ```
@@ -41,8 +46,8 @@ docs/
 ## 环境
 
 - Python 3.10+
-- Windows / Linux / macOS
-- 依赖：`pilk`、`faster-whisper`、`zstandard`（可选，用于解压部分消息内容）
+- 密钥捕获仅支持 Windows（需要 Hook `Weixin.exe`）；解密与导出可跨平台
+- 依赖：`pycryptodome`、`psutil`、`pilk`、`faster-whisper`、`zstandard`（可选，用于解压部分消息内容）
 
 ```bash
 python -m venv .venv
@@ -52,7 +57,31 @@ pip install -r requirements.txt
 
 ## 快速开始
 
-### 1. 检查数据库结构
+### 1. 捕获数据库密钥
+
+需要自行准备与微信版本匹配的 Hook DLL。仓库不附带 DLL，也不附带任何密钥。
+
+```bash
+python scripts/hook_key.py ^
+  --dll "C:\path\to\your_key_hook.dll" ^
+  --process Weixin.exe ^
+  --out ".\out\db.key"
+```
+
+捕获期间在微信中切换或打开聊天窗口。接口、密钥格式与版本注意事项见 [docs/key-extraction.md](docs/key-extraction.md)。
+
+### 2. 批量解密
+
+```bash
+python scripts/decrypt_db.py ^
+  --dir "C:\Users\<you>\xwechat_files\<wxid>\db_storage" ^
+  --key-file ".\out\db.key" ^
+  --out-dir ".\out\decrypted"
+```
+
+每个 `.db` 用自己的文件头 salt 派生 raw key；默认跳过已存在的 `.decrypted.db`，`--force` 可覆盖。参数与页格式见 [docs/sqlcipher.md](docs/sqlcipher.md)。
+
+### 3. 检查数据库结构
 
 ```bash
 python scripts/inspect_db.py --db "C:\path\to\message_0.decrypted.db"
@@ -66,7 +95,7 @@ message_0.decrypted.db
   Msg_<md5>                rows=...
 ```
 
-### 2. 导出消息
+### 4. 导出消息
 
 ```bash
 python scripts/export_messages.py ^
@@ -93,7 +122,7 @@ python scripts/export_messages.py ^
 {"session":"<user_name>","create_time":1700000000,"datetime":"2023-11-15 06:13:20","local_id":123,"sender":"<user_name>","type":1,"content":"..."}
 ```
 
-### 3. 导出语音
+### 5. 导出语音
 
 ```bash
 python scripts/export_voices.py ^
@@ -118,7 +147,7 @@ python scripts/export_voices.py ^
 - `voice_00001_<timestamp>.wav`
 - `manifest.jsonl`：`index`、`session`、`create_time`、`local_id`、`duration`、`wav`
 
-### 4. 离线转写
+### 6. 离线转写
 
 ```bash
 python scripts/transcribe_voices.py ^
@@ -141,7 +170,7 @@ python scripts/transcribe_voices.py ^
 
 | 微信版本 | 状态 | 说明 |
 |---|---|---|
-| 4.1.11.55 | 实测 | 消息库、媒体库、SILK V3 语音导出与转写可用 |
+| 4.1.11.55 | 实测 | Hook 捕获密钥、SQLCipher 4 解密、消息/媒体库导出与 SILK V3 转写可用 |
 | 4.1.8 | 未实测 | 表结构可能不同，先运行 `inspect_db.py` |
 | 4.0.x | 未实测 | 表结构可能不同 |
 
@@ -151,22 +180,25 @@ python scripts/transcribe_voices.py ^
 
 - 仅处理本人账号的数据，或已取得明确授权的数据。
 - 不要导出、传播或训练他人聊天记录、语音和图片。
-- 本仓库不提供密钥提取或 Hook 的具体实现；输入数据库的获取方式由使用者自行负责。
+- 密钥等同于数据库明文访问权限：不要提交到 Git、不要发到聊天工具、不要写进截图；导出完成后删除密钥文件。
+- 仓库不附带 Hook DLL；DLL 需要按目标微信版本自行编译或从可信来源取得。
 - 使用前请确认符合当地法律、微信软件许可协议和所在组织的规定。
 
 ## 第三方依赖
 
 | 依赖 | 用途 |
 |---|---|
+| [pycryptodome](https://www.pycryptodome.org/) | AES-256-CBC 解密 |
+| [psutil](https://github.com/giampaolo/psutil) | 定位 `Weixin.exe` 进程 |
 | [pilk](https://pypi.org/project/pilk/) | SILK V3 解码 |
 | [faster-whisper](https://github.com/SYSTRAN/faster-whisper) | 离线语音转写 |
 | [zstandard](https://github.com/facebook/zstd) | 可选，解压 zstd 消息内容 |
 
-依赖项版权与许可证归各自上游项目所有，本项目不打包其源码。
+依赖项版权与许可证归各自上游项目所有，本项目不打包其源码。Hook DLL 不属于本仓库的依赖，也不随仓库分发。
 
 ## English
 
-A small toolkit for exporting **your own authorized** WeChat 4.x local backup: message tables to JSONL/CSV, `VoiceInfo` blobs to WAV, and offline transcription with faster-whisper. Tested on WeChat `4.1.11.55` (Windows x64, 2026-08). This repository contains only the post-decryption export and transcription module; key acquisition and SQLCipher decryption are outside its scope, so it starts from an already-decrypted SQLite database. It does **not** include key-extraction code, process hooking, third-party binaries, or any personal data.
+A toolkit for your own authorized WeChat 4.x local backup: capture the database passphrase through an external hook DLL you supply, decrypt SQLCipher 4 databases with per-file salts and PBKDF2-HMAC-SHA512, then export message tables to JSONL/CSV, extract `VoiceInfo` blobs to WAV, and transcribe offline with faster-whisper. Tested on WeChat `4.1.11.55` (Windows x64, 2026-08). The repository contains the hook client, the decryption implementation, and the export tools, but no hook DLL, no keys, no chats, and no third-party binaries or personal data.
 
 ## License
 

@@ -13,6 +13,8 @@
 *key*.txt
 *.key
 *.pem
+*.dll
+*.exe
 .env
 .env.*
 xwechat_files/
