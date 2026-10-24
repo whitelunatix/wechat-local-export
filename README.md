@@ -16,9 +16,9 @@
 
 ## 边界
 
-本项目**不包含**以下内容，也不会随仓库分发：
+本仓库只开源**解密后的导出与转写模块**；完整本地流程中的密钥获取与 SQLCipher 解密不在开源范围，因此仓库从 `.decrypted.db` 开始。以下内容不在本仓库中，也不会随仓库分发：
 
-- 微信数据库密钥提取、内存扫描或进程 Hook
+- 微信数据库密钥提取、内存扫描或进程 Hook 的具体实现
 - 任何第三方 DLL、EXE 或二进制文件
 - 任何聊天记录、语音、图片、模型权重或训练数据
 - 第三方 clone 仓库的代码
@@ -151,7 +151,7 @@ python scripts/transcribe_voices.py ^
 
 - 仅处理本人账号的数据，或已取得明确授权的数据。
 - 不要导出、传播或训练他人聊天记录、语音和图片。
-- 本项目不提供密钥提取或 Hook 能力；输入数据库的获取方式由使用者自行负责。
+- 本仓库不提供密钥提取或 Hook 的具体实现；输入数据库的获取方式由使用者自行负责。
 - 使用前请确认符合当地法律、微信软件许可协议和所在组织的规定。
 
 ## 第三方依赖
@@ -166,7 +166,7 @@ python scripts/transcribe_voices.py ^
 
 ## English
 
-A small toolkit for exporting **your own authorized** WeChat 4.x local backup: message tables to JSONL/CSV, `VoiceInfo` blobs to WAV, and offline transcription with faster-whisper. Tested on WeChat `4.1.11.55` (Windows x64, 2026-08). It starts from an already-decrypted SQLite database and does **not** include key extraction, process hooking, third-party binaries, or any personal data.
+A small toolkit for exporting **your own authorized** WeChat 4.x local backup: message tables to JSONL/CSV, `VoiceInfo` blobs to WAV, and offline transcription with faster-whisper. Tested on WeChat `4.1.11.55` (Windows x64, 2026-08). This repository contains only the post-decryption export and transcription module; key acquisition and SQLCipher decryption are outside its scope, so it starts from an already-decrypted SQLite database. It does **not** include key-extraction code, process hooking, third-party binaries, or any personal data.
 
 ## License
 
